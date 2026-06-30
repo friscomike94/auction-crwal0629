@@ -1,17 +1,42 @@
 #!/usr/bin/env python3
 """
-의정부지방법원 아파트 유찰1회 이상 경매물건 수집
-court-auction-scraper 스킬 패턴 적용
+법원경매 물건 수집기 (courtauction.go.kr)
+
+사용 예:
+  python3 scrape_uijeongbu_apt.py
+  python3 scrape_uijeongbu_apt.py --court 서울중앙지방법원 --scl 아파트 --flbd-min 2회
+  python3 scrape_uijeongbu_apt.py --court 전체 --mcl 주거용건물 -o results.csv
 """
 
+import argparse
 import csv
 import os
 import time
 from playwright.sync_api import sync_playwright
 
 TARGET_URL = "https://www.courtauction.go.kr/pgj/index.on?w2xPath=/pgj/ui/pgj100/PGJ151F00.xml"
-OUTPUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auction_list.csv")
 COLUMNS = ['사건번호', '물건소재지', '감정가', '최저가', '유찰횟수']
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='법원경매 물건 수집기')
+    parser.add_argument('--court',    default='의정부지방법원', help='법원명 (기본: 의정부지방법원, "전체" 입력 시 전국)')
+    parser.add_argument('--lcl',      default='건물',          help='용도 대분류 (기본: 건물)')
+    parser.add_argument('--mcl',      default='주거용건물',     help='용도 중분류 (기본: 주거용건물)')
+    parser.add_argument('--scl',      default='아파트',         help='용도 소분류 (기본: 아파트, "전체" 입력 시 생략)')
+    parser.add_argument('--flbd-min', default='1회',           help='유찰횟수 최솟값 (기본: 1회, "전체" 입력 시 생략)')
+    parser.add_argument('-o', '--output', default=None,        help='출력 CSV 파일명 (기본: 자동 생성)')
+    return parser.parse_args()
+
+
+def make_output_path(args):
+    if args.output:
+        return args.output
+    court = args.court.replace('지방법원', '').replace('전체', '전국')
+    scl   = args.scl if args.scl != '전체' else args.mcl
+    flbd  = args.flbd_min.replace('전체', '전체유찰')
+    name  = f"auction_{court}_{scl}_유찰{flbd}.csv"
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
 
 
 def fmt_money(val):
@@ -24,15 +49,15 @@ def fmt_money(val):
 def build_address(item):
     parts = [item.get('hjguSido', ''), item.get('hjguSigu', ''),
              item.get('hjguDong', ''), item.get('daepyoLotno', '')]
-    addr = ' '.join(p for p in parts if p.strip())
+    addr  = ' '.join(p for p in parts if p.strip())
     extra = item.get('convAddr', '').strip()
-    full = (addr + (' ' + extra if extra else '')).strip()
-    return ' '.join(full.split())  # 줄바꿈/연속 공백 정제
+    full  = (addr + (' ' + extra if extra else '')).strip()
+    return ' '.join(full.split())
 
 
 def build_case_no(item):
     court = item.get('jiwonNm', '').strip()
-    case = item.get('srnSaNo', '').strip()
+    case  = item.get('srnSaNo', '').strip()
     return f"{court} {case}".strip() if court else case or str(item.get('saNo', ''))
 
 
@@ -50,7 +75,7 @@ def get_max_page(page):
     return page.evaluate("""
     () => {
         const links = Array.from(document.querySelectorAll('[id*="pgl_gdsDtlSrchPage_page_"]'));
-        const nums = links.map(el => { const m = el.id.match(/_page_(\\d+)$/); return m ? +m[1] : 0; });
+        const nums  = links.map(el => { const m = el.id.match(/_page_(\\d+)$/); return m ? +m[1] : 0; });
         return nums.length ? Math.max(...nums) : 0;
     }
     """)
@@ -71,14 +96,17 @@ def set_select(page, el_id, value):
 
 
 def main():
-    all_items = []
+    args   = parse_args()
+    output = make_output_path(args)
+
+    all_items     = []
     response_flag = [False]
 
     def on_response(response):
         if 'searchControllerMain' not in response.url:
             return
         try:
-            body = response.json()
+            body  = response.json()
             items = body.get('data', {}).get('dlt_srchResult', [])
             if items:
                 all_items.extend(items)
@@ -104,7 +132,7 @@ def main():
         )
         context.add_init_script("""
         Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-        Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});
+        Object.defineProperty(navigator, 'plugins',  {get: () => [1,2,3,4,5]});
         window.chrome = {runtime: {}};
         """)
         page = context.new_page()
@@ -128,39 +156,35 @@ def main():
         # ── 검색 조건 설정 ────────────────────────────────────────────
         print("▶ 검색 조건 설정...")
 
-        # 법원 + 유찰횟수 (DOM 업데이트 불필요, 한 번에)
-        page.evaluate("""
-        () => {
-            const set = (id, val) => {
-                const sel = document.getElementById(id);
-                if (!sel) return;
-                const opt = Array.from(sel.options).find(o => o.value === val || o.text === val);
-                if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event('change', {bubbles: true})); }
-            };
-            set('mf_wfm_mainFrame_sbx_rletCortOfc',    '의정부지방법원');
-            set('mf_wfm_mainFrame_sbx_rletFlbdCntMin', '1회');
-        }
-        """)
-        print("  법원: 의정부지방법원 / 유찰횟수: 1회 이상")
+        # 법원
+        if args.court != '전체':
+            set_select(page, 'mf_wfm_mainFrame_sbx_rletCortOfc', args.court)
+            print(f"  법원: {args.court}")
 
-        # 용도 대분류: 건물 (아파트 = 건물 > 주거용건물 > 아파트)
-        set_select(page, 'mf_wfm_mainFrame_sbx_rletLclLst', '건물')
+        # 유찰횟수
+        if args.flbd_min != '전체':
+            set_select(page, 'mf_wfm_mainFrame_sbx_rletFlbdCntMin', args.flbd_min)
+            print(f"  유찰횟수: {args.flbd_min} 이상")
+
+        # 용도 대분류
+        set_select(page, 'mf_wfm_mainFrame_sbx_rletLclLst', args.lcl)
         time.sleep(3)  # 중분류 DOM 업데이트 대기
 
-        # 용도 중분류: 주거용건물
-        set_select(page, 'mf_wfm_mainFrame_sbx_rletMclLst', '주거용건물')
+        # 용도 중분류
+        set_select(page, 'mf_wfm_mainFrame_sbx_rletMclLst', args.mcl)
         time.sleep(3)  # 소분류 DOM 업데이트 대기
 
-        # 용도 소분류: 아파트
-        set_select(page, 'mf_wfm_mainFrame_sbx_rletSclLst', '아파트')
-        print("  용도: 건물 > 주거용건물 > 아파트")
+        # 용도 소분류
+        if args.scl != '전체':
+            set_select(page, 'mf_wfm_mainFrame_sbx_rletSclLst', args.scl)
+        print(f"  용도: {args.lcl} > {args.mcl}" + (f" > {args.scl}" if args.scl != '전체' else ''))
+
         time.sleep(1)
 
         # ── 검색 실행 ─────────────────────────────────────────────────
         print("▶ 검색 실행...")
         page.evaluate("() => { document.getElementById('mf_wfm_mainFrame_btn_gdsDtlSrch').click(); }")
 
-        # 첫 페이지 응답 대기 (파이프라인 딜레이로 타임아웃 정상)
         for _ in range(30):
             time.sleep(1)
             if response_flag[0]:
@@ -190,7 +214,7 @@ def main():
                 if response_flag[0]:
                     break
 
-        # 파이프라인 플러시 — 마지막 응답 수집
+        # 파이프라인 플러시
         if max_page > 0:
             response_flag[0] = False
             page.evaluate(f"""
@@ -219,12 +243,12 @@ def main():
         return
 
     rows = [convert_item(item) for item in all_items]
-    with open(OUTPUT, 'w', newline='', encoding='utf-8-sig') as f:
+    with open(output, 'w', newline='', encoding='utf-8-sig') as f:
         writer = csv.DictWriter(f, fieldnames=COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"✅ {len(rows)}행 → {OUTPUT}")
+    print(f"✅ {len(rows)}행 → {output}")
     print("\n[미리보기]")
     for r in rows[:10]:
         print(f"  {r['사건번호']} | {r['물건소재지'][:40]} | {r['감정가']} | {r['최저가']} | 유찰{r['유찰횟수']}회")

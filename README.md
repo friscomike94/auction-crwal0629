@@ -2,16 +2,9 @@
 
 의정부지방법원 관할 아파트 경매물건 중 유찰 1회 이상인 건을 자동 수집하여 CSV로 저장합니다.
 
-## 수집 대상
+## 수집 항목
 
-- **법원**: 의정부지방법원
-- **용도**: 아파트 (건물 > 주거용건물 > 아파트)
-- **조건**: 유찰횟수 1회 이상
-- **출처**: [대한민국 법원경매정보](https://www.courtauction.go.kr)
-
-## 결과 파일
-
-`auction_list.csv` — 사건번호, 물건소재지, 감정가, 최저가, 유찰횟수
+사건번호, 물건소재지, 감정가, 최저가, 유찰횟수 → CSV 저장
 
 ## 사용법
 
@@ -19,9 +12,37 @@
 pip3 install playwright
 python3 -m playwright install chromium
 
+# 기본 (의정부지방법원 / 아파트 / 유찰 1회 이상)
 python3 scrape_uijeongbu_apt.py
-# → auction_list.csv 생성
+
+# 법원 변경
+python3 scrape_uijeongbu_apt.py --court 서울중앙지방법원
+
+# 유찰 조건 변경
+python3 scrape_uijeongbu_apt.py --court 수원지방법원 --flbd-min 3회
+
+# 용도 변경 (대분류 > 중분류 > 소분류)
+python3 scrape_uijeongbu_apt.py --lcl 건물 --mcl 주거용건물 --scl 연립다세대
+
+# 전국 / 소분류 전체
+python3 scrape_uijeongbu_apt.py --court 전체 --scl 전체
+
+# 출력 파일명 지정
+python3 scrape_uijeongbu_apt.py --court 인천지방법원 -o incheon_apt.csv
 ```
+
+### 옵션
+
+| 옵션 | 기본값 | 설명 |
+|------|--------|------|
+| `--court` | 의정부지방법원 | 법원명. `전체` 입력 시 전국 검색 |
+| `--lcl` | 건물 | 용도 대분류 |
+| `--mcl` | 주거용건물 | 용도 중분류 |
+| `--scl` | 아파트 | 용도 소분류. `전체` 입력 시 중분류까지만 적용 |
+| `--flbd-min` | 1회 | 유찰횟수 최솟값. `전체` 입력 시 조건 없음 |
+| `-o` / `--output` | 자동 생성 | 출력 CSV 파일명 |
+
+출력 파일명 자동 생성 예: `auction_의정부_아파트_유찰1회.csv`
 
 ## 기술 스택
 
