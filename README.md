@@ -35,14 +35,48 @@ python3 scrape_uijeongbu_apt.py --court 인천지방법원 -o incheon_apt.csv
 
 | 옵션 | 기본값 | 설명 |
 |------|--------|------|
+| `-t` / `--template` | — | 템플릿 JSON 파일 경로 |
 | `--court` | 의정부지방법원 | 법원명. `전체` 입력 시 전국 검색 |
+| `--sido` | — | 시/도 (예: 서울특별시) |
+| `--sgg` | — | 시/군/구 (예: 금천구, 양주시) |
 | `--lcl` | 건물 | 용도 대분류 |
 | `--mcl` | 주거용건물 | 용도 중분류 |
 | `--scl` | 아파트 | 용도 소분류. `전체` 입력 시 중분류까지만 적용 |
 | `--flbd-min` | 1회 | 유찰횟수 최솟값. `전체` 입력 시 조건 없음 |
 | `-o` / `--output` | 자동 생성 | 출력 CSV 파일명 |
 
-출력 파일명 자동 생성 예: `auction_의정부_아파트_유찰1회.csv`
+출력 파일명 자동 생성 예: `auction_의정부_양주시_아파트_유찰1회.csv`
+
+### 템플릿
+
+자주 쓰는 검색 조건을 `templates/*.json`으로 저장해 재사용할 수 있습니다.
+CLI 인자를 함께 쓰면 템플릿 값을 덮어씁니다.
+
+```bash
+# 저장된 조건 그대로 실행
+python3 scrape_uijeongbu_apt.py -t templates/uijeongbu_apt.json
+python3 scrape_uijeongbu_apt.py -t templates/uijeongbu_yangju_apt.json
+python3 scrape_uijeongbu_apt.py -t templates/nambu_geumcheon_dasedae.json
+
+# 템플릿 기반으로 일부 조건만 변경
+python3 scrape_uijeongbu_apt.py -t templates/uijeongbu_apt.json --sgg 포천시
+python3 scrape_uijeongbu_apt.py -t templates/uijeongbu_apt.json --flbd-min 3회
+```
+
+**템플릿 추가 방법** — `templates/` 에 JSON 파일 생성:
+
+```json
+{
+  "court": "수원지방법원",
+  "sgg": "수원시",
+  "lcl": "건물",
+  "mcl": "주거용건물",
+  "scl": "아파트",
+  "flbd_min": "2회"
+}
+```
+
+**우선순위**: CLI 인자 > 템플릿 > 기본값
 
 ## 프로젝트 구조
 
@@ -50,6 +84,10 @@ python3 scrape_uijeongbu_apt.py --court 인천지방법원 -o incheon_apt.csv
 auction-crwal0629/
 ├── scrape_uijeongbu_apt.py        # 메인 스크래퍼 (CLI 인자 지원)
 ├── auction_list.csv               # 초기 수집 결과 샘플
+├── templates/                     # 검색 조건 템플릿
+│   ├── uijeongbu_apt.json         # 의정부지방법원 / 아파트 / 유찰1회
+│   ├── uijeongbu_yangju_apt.json  # 의정부지방법원 / 양주시 / 아파트 / 유찰1회
+│   └── nambu_geumcheon_dasedae.json  # 서울남부 / 금천구 / 다세대주택 / 유찰1회
 └── skill/                         # Claude Code 재사용 스킬
     ├── SKILL.md                   # 올바른 패턴, 드롭다운 체계, API 필드 매핑
     ├── references/
