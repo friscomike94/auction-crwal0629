@@ -8,5 +8,8 @@ venv/
 # macOS
 .DS_Store
 
+# 검색 결과 CSV (auction_list.csv 제외)
+auction_*.csv
+
 # 디버그 스크린샷
 /tmp/*.png
