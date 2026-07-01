@@ -13,3 +13,6 @@ auction_*.csv
 
 # 디버그 스크린샷
 /tmp/*.png
+
+# 원본 API 덤프 (데이터)
+raw_*.json
