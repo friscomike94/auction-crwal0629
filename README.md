@@ -1,5 +1,8 @@
 # 법원경매 아파트 물건 수집기
 
+> **Mono Signal 대시보드**: [`docs/index.html`](docs/index.html)
+> CSV 수집 결과를 PropTech AI 리포트 형태로 시각화합니다.
+
 의정부지방법원 관할 아파트 경매물건 중 유찰 1회 이상인 건을 자동 수집하여 CSV로 저장합니다.
 
 ## 수집 항목
